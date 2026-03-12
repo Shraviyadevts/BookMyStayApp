@@ -1,45 +1,46 @@
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 
 /**
  * ============================================================
- * MAIN CLASS - UseCase5BookingRequestQueue
+ * MAIN CLASS - UseCase6RoomAllocationService
  * ============================================================
  *
- * Use Case 5: Booking Request (First-Come-First-Served)
+ * Use Case 6: Reservation Confirmation & Room Allocation
  *
  * Description:
- * Demonstrates handling of booking requests using
- * a FIFO queue structure to preserve request order.
+ * Processes booking requests from the queue, allocates rooms,
+ * generates unique room IDs, and updates inventory safely.
  *
- * @author Developer
- * @version 5.1
+ * @version 6.1
  */
 
 public class BookMyStayApp {
 
     public static void main(String[] args) {
 
+        RoomInventory inventory = new RoomInventory();
         BookingRequestQueue bookingQueue = new BookingRequestQueue();
 
-        System.out.println("===== Booking Request Queue =====\n");
-
-        // Guests submitting booking requests
+        // Add booking requests
         bookingQueue.addRequest(new Reservation("Alice", "Single Room"));
         bookingQueue.addRequest(new Reservation("Bob", "Double Room"));
-        bookingQueue.addRequest(new Reservation("Charlie", "Suite Room"));
+        bookingQueue.addRequest(new Reservation("Charlie", "Single Room"));
 
-        // Display queued requests
-        bookingQueue.displayRequests();
+        // Allocation service
+        RoomAllocationService allocationService =
+                new RoomAllocationService(inventory, bookingQueue);
+
+        System.out.println("===== Processing Reservations =====\n");
+
+        allocationService.processReservations();
     }
 }
 
 
 /**
  * Reservation Class
- * Represents a guest booking request.
- *
- * @version 5.0
+ * Represents a booking request.
+ * @version 6.0
  */
 class Reservation {
 
@@ -58,47 +59,126 @@ class Reservation {
     public String getRoomType() {
         return roomType;
     }
-
-    public void displayReservation() {
-        System.out.println("Guest Name : " + guestName);
-        System.out.println("Room Type  : " + roomType);
-    }
 }
 
 
 /**
  * BookingRequestQueue Class
- * Manages booking requests using FIFO principle.
- *
- * @version 5.0
+ * Maintains booking requests using FIFO queue.
+ * @version 6.0
  */
 class BookingRequestQueue {
 
-    private Queue<Reservation> requestQueue;
+    private Queue<Reservation> queue = new LinkedList<>();
 
-    public BookingRequestQueue() {
-        requestQueue = new LinkedList<>();
-    }
-
-    // Add request to queue
     public void addRequest(Reservation reservation) {
-
-        requestQueue.offer(reservation);
-
-        System.out.println("Booking request added for "
-                + reservation.getGuestName()
-                + " (" + reservation.getRoomType() + ")");
+        queue.offer(reservation);
     }
 
-    // Display queued requests
-    public void displayRequests() {
+    public Reservation getNextRequest() {
+        return queue.poll();
+    }
 
-        System.out.println("\nRequests in Queue (FIFO Order):\n");
+    public boolean hasRequests() {
+        return !queue.isEmpty();
+    }
+}
 
-        for (Reservation r : requestQueue) {
 
-            r.displayReservation();
-            System.out.println();
+/**
+ * RoomInventory Class
+ * Maintains available room counts.
+ * @version 6.0
+ */
+class RoomInventory {
+
+    private HashMap<String, Integer> availability = new HashMap<>();
+
+    public RoomInventory() {
+
+        availability.put("Single Room", 2);
+        availability.put("Double Room", 1);
+        availability.put("Suite Room", 1);
+    }
+
+    public int getAvailability(String roomType) {
+        return availability.getOrDefault(roomType, 0);
+    }
+
+    public void decreaseAvailability(String roomType) {
+
+        int count = availability.get(roomType);
+        availability.put(roomType, count - 1);
+    }
+}
+
+
+/**
+ * RoomAllocationService Class
+ * Handles reservation confirmation and room allocation.
+ * @version 6.0
+ */
+class RoomAllocationService {
+
+    private RoomInventory inventory;
+    private BookingRequestQueue queue;
+
+    private Set<String> allocatedRoomIds = new HashSet<>();
+    private HashMap<String, Set<String>> roomAllocations = new HashMap<>();
+
+    public RoomAllocationService(RoomInventory inventory,
+                                 BookingRequestQueue queue) {
+
+        this.inventory = inventory;
+        this.queue = queue;
+    }
+
+    public void processReservations() {
+
+        while (queue.hasRequests()) {
+
+            Reservation reservation = queue.getNextRequest();
+            String roomType = reservation.getRoomType();
+
+            int available = inventory.getAvailability(roomType);
+
+            if (available > 0) {
+
+                String roomId = generateRoomId(roomType);
+
+                // ensure uniqueness
+                while (allocatedRoomIds.contains(roomId)) {
+                    roomId = generateRoomId(roomType);
+                }
+
+                allocatedRoomIds.add(roomId);
+
+                roomAllocations
+                        .computeIfAbsent(roomType, k -> new HashSet<>())
+                        .add(roomId);
+
+                inventory.decreaseAvailability(roomType);
+
+                System.out.println("Reservation Confirmed");
+                System.out.println("Guest: " + reservation.getGuestName());
+                System.out.println("Room Type: " + roomType);
+                System.out.println("Assigned Room ID: " + roomId);
+                System.out.println();
+
+            } else {
+
+                System.out.println("Reservation Failed for "
+                        + reservation.getGuestName()
+                        + " - No " + roomType + " available.\n");
+            }
         }
+    }
+
+    private String generateRoomId(String roomType) {
+
+        String prefix = roomType.replace(" Room", "").substring(0, 1);
+        int number = new Random().nextInt(900) + 100;
+
+        return prefix + number;
     }
 }
